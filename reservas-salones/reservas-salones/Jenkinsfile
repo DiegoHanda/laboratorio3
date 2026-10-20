@@ -20,8 +20,8 @@ pipeline {
   }
 
   environment {
-    REGISTRY  = 'COMPLETAR' // p. ej. registry.<dominio-del-laboratorio>/team2
-    HOST      = 'COMPLETAR' // p. ej. reservas-team2.<dominio-del-laboratorio>
+    REGISTRY  = 'docker.io/dh54912398'
+    HOST      = 'reservas-team2.reto-ucu.net'
     NAMESPACE = 'alumno-team2'
   }
 
