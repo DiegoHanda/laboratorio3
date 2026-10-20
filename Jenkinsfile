@@ -2,10 +2,11 @@
 // Nadie ejecuta kubectl a mano: el único acceso al cluster es el kubeconfig guardado como credencial de Jenkins.
 //
 // Credenciales de Jenkins necesarias:
-//   registry-creds           (usuario y contraseña del registro de imágenes)
+//   registry-creds           (usuario y token del registro de imágenes)
 //   kubeconfig-team2         (archivo: el kubeconfig del equipo)
 //   reservas-admin-password  (texto secreto: contraseña inicial del administrador)
-// El agente necesita docker, node 22, kubectl y envsubst.
+// El agente solo necesita docker (para tests y build) y kubectl (para el deploy).
+// Los tests corren dentro de contenedores, así que Jenkins no necesita Node.
 
 pipeline {
   agent any
@@ -35,6 +36,8 @@ pipeline {
           // Las imágenes se etiquetan con el commit que las originó.
           env.TAG = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER
         }
+        // Informativo: muestra qué herramientas tiene el agente.
+        sh 'for c in docker kubectl; do command -v $c >/dev/null && echo "OK: $c" || echo "FALTA: $c"; done'
       }
     }
 
@@ -42,24 +45,22 @@ pipeline {
       parallel {
         stage('API') {
           steps {
-            dir('api') {
-              sh '''
-                set -e
-                PG=$(docker run -d --rm -e POSTGRES_PASSWORD=test -p 127.0.0.1::5432 postgres:16-alpine)
-                trap "docker stop $PG >/dev/null" EXIT
-                PORT=$(docker port $PG 5432/tcp | head -1 | sed 's/.*://')
-                until docker exec $PG pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-                npm ci
-                DATABASE_URL=postgres://postgres:test@127.0.0.1:$PORT/postgres npm test
-              '''
-            }
+            sh '''
+              set -e
+              docker build --target test -t reservas-api-test:$BUILD_NUMBER api
+              PG=$(docker run -d --rm -e POSTGRES_PASSWORD=test postgres:16-alpine)
+              trap "docker stop $PG >/dev/null" EXIT
+              # Por TCP: durante el arranque inicial Postgres solo escucha por socket y respondería "listo" antes de tiempo.
+              until docker exec $PG pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do sleep 1; done
+              docker run --rm --network container:$PG \
+                -e DATABASE_URL=postgres://postgres:test@127.0.0.1:5432/postgres \
+                reservas-api-test:$BUILD_NUMBER
+            '''
           }
         }
         stage('Web') {
           steps {
-            dir('web') {
-              sh 'npm ci && npm test'
-            }
+            sh 'docker build --target test -t reservas-web-test:$BUILD_NUMBER web'
           }
         }
       }
@@ -96,16 +97,19 @@ pipeline {
         ]) {
           sh '''
             set -e
+            rand() { head -c "$1" /dev/urandom | od -An -tx1 | tr -d '[:space:]'; }
+
             # Los secretos se crean una sola vez; la base conserva sus datos entre despliegues.
             kubectl get secret reservas-secrets -n $NAMESPACE >/dev/null 2>&1 || \
               kubectl create secret generic reservas-secrets -n $NAMESPACE \
-                --from-literal=DB_PASSWORD="$(openssl rand -hex 16)" \
-                --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+                --from-literal=DB_PASSWORD="$(rand 16)" \
+                --from-literal=JWT_SECRET="$(rand 32)" \
                 --from-literal=ADMIN_EMAIL="admin@reservas.test" \
                 --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD"
 
             for f in k8s/*.yaml; do
-              envsubst '${REGISTRY} ${TAG} ${HOST}' < "$f" | kubectl apply -n $NAMESPACE -f -
+              sed -e 's|${REGISTRY}|'"$REGISTRY"'|g' -e 's|${TAG}|'"$TAG"'|g' -e 's|${HOST}|'"$HOST"'|g' "$f" \
+                | kubectl apply -n $NAMESPACE -f -
             done
 
             kubectl rollout status statefulset/postgres -n $NAMESPACE --timeout=180s
