@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: ${REGISTRY}/reservas-api:${TAG}
+          ports:
+            - containerPort: 3000
+          env:
+            - { name: PGHOST, value: postgres }
+            - { name: PGUSER, value: reservas }
+            - { name: PGDATABASE, value: reservas }
+            - { name: SEED_DEMO, value: "true" } # salones y alumno de demo; poner "false" para producción real
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: reservas-secrets, key: DB_PASSWORD } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: reservas-secrets, key: JWT_SECRET } }
+            - name: ADMIN_EMAIL
+              valueFrom: { secretKeyRef: { name: reservas-secrets, key: ADMIN_EMAIL } }
+            - name: ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: reservas-secrets, key: ADMIN_PASSWORD } }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 256Mi }

@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1d2330; }
+.app { max-width: 720px; margin: 0 auto; padding: 0 16px 96px; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0 8px; gap: 8px; flex-wrap: wrap; }
+nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+main { padding-top: 8px; }
+label { display: block; font-size: 14px; margin: 8px 0; }
+input { display: block; width: 100%; padding: 10px; margin-top: 4px; font-size: 16px; border: 1px solid #c5cad3; border-radius: 8px; }
+button { font: inherit; padding: 8px 12px; border: 1px solid #c5cad3; border-radius: 8px; background: #fff; cursor: pointer; }
+button.primario { background: #2457d6; border-color: #2457d6; color: #fff; }
+button.link { border: 0; background: none; color: #2457d6; padding: 0; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+.tab.activa { background: #1d2330; color: #fff; }
+.tarjeta { background: #fff; border-radius: 12px; padding: 12px 16px; margin: 12px 0; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.tarjeta h3 { margin: 0 0 4px; }
+.tarjeta.cancelada { opacity: .55; }
+.detalle { color: #5b6475; font-size: 14px; margin: 4px 0 8px; }
+.franjas { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.franja.activa { background: #2457d6; color: #fff; border-color: #2457d6; }
+.barra { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; padding: 12px 16px; display: flex; gap: 12px; align-items: flex-end; justify-content: space-between; box-shadow: 0 -2px 8px rgba(0,0,0,.12); }
+.barra > div { flex: 1; max-width: 560px; }
+.error { color: #b3261e; }
+.ok { color: #1b7a3a; }
+.login { padding-top: 48px; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3e6eb; }

@@ -1,0 +1,119 @@
+// Pipeline: un push a la rama principal prueba, construye, publica y despliega.
+// Nadie ejecuta kubectl a mano: el único acceso al cluster es el kubeconfig guardado como credencial de Jenkins.
+//
+// Credenciales de Jenkins necesarias:
+//   registry-creds           (usuario y contraseña del registro de imágenes)
+//   kubeconfig-team2         (archivo: el kubeconfig del equipo)
+//   reservas-admin-password  (texto secreto: contraseña inicial del administrador)
+// El agente necesita docker, node 22, kubectl y envsubst.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+  }
+
+  triggers {
+    pollSCM('H/2 * * * *') // quitar si el repositorio avisa por webhook
+  }
+
+  environment {
+    REGISTRY  = 'COMPLETAR' // p. ej. registry.<dominio-del-laboratorio>/team2
+    HOST      = 'COMPLETAR' // p. ej. reservas-team2.<dominio-del-laboratorio>
+    NAMESPACE = 'alumno-team2'
+  }
+
+  stages {
+    stage('Configuración') {
+      steps {
+        script {
+          if (env.REGISTRY == 'COMPLETAR' || env.HOST == 'COMPLETAR') {
+            error('Completar REGISTRY y HOST en el Jenkinsfile')
+          }
+          // Las imágenes se etiquetan con el commit que las originó.
+          env.TAG = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER
+        }
+      }
+    }
+
+    stage('Tests') {
+      parallel {
+        stage('API') {
+          steps {
+            dir('api') {
+              sh '''
+                set -e
+                PG=$(docker run -d --rm -e POSTGRES_PASSWORD=test -p 127.0.0.1::5432 postgres:16-alpine)
+                trap "docker stop $PG >/dev/null" EXIT
+                PORT=$(docker port $PG 5432/tcp | head -1 | sed 's/.*://')
+                until docker exec $PG pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+                npm ci
+                DATABASE_URL=postgres://postgres:test@127.0.0.1:$PORT/postgres npm test
+              '''
+            }
+          }
+        }
+        stage('Web') {
+          steps {
+            dir('web') {
+              sh 'npm ci && npm test'
+            }
+          }
+        }
+      }
+    }
+
+    stage('Build') {
+      steps {
+        sh '''
+          docker build -t $REGISTRY/reservas-api:$TAG api
+          docker build -t $REGISTRY/reservas-web:$TAG web
+        '''
+      }
+    }
+
+    stage('Push') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'registry-creds', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+          sh '''
+            echo "$REG_PASS" | docker login "${REGISTRY%%/*}" -u "$REG_USER" --password-stdin
+            docker push $REGISTRY/reservas-api:$TAG
+            docker push $REGISTRY/reservas-web:$TAG
+          '''
+        }
+      }
+    }
+
+    stage('Deploy') {
+      // Solo la rama principal despliega (sirve en multibranch y en un job de pipeline simple).
+      when { expression { (env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main') ==~ /(origin\/)?main/ } }
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-team2', variable: 'KUBECONFIG'),
+          string(credentialsId: 'reservas-admin-password', variable: 'ADMIN_PASSWORD')
+        ]) {
+          sh '''
+            set -e
+            # Los secretos se crean una sola vez; la base conserva sus datos entre despliegues.
+            kubectl get secret reservas-secrets -n $NAMESPACE >/dev/null 2>&1 || \
+              kubectl create secret generic reservas-secrets -n $NAMESPACE \
+                --from-literal=DB_PASSWORD="$(openssl rand -hex 16)" \
+                --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+                --from-literal=ADMIN_EMAIL="admin@reservas.test" \
+                --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD"
+
+            for f in k8s/*.yaml; do
+              envsubst '${REGISTRY} ${TAG} ${HOST}' < "$f" | kubectl apply -n $NAMESPACE -f -
+            done
+
+            kubectl rollout status statefulset/postgres -n $NAMESPACE --timeout=180s
+            kubectl rollout status deployment/api -n $NAMESPACE --timeout=180s
+            kubectl rollout status deployment/web -n $NAMESPACE --timeout=180s
+          '''
+        }
+      }
+    }
+  }
+}
