@@ -87,7 +87,7 @@ pipeline {
       }
     }
 
-    stage('Deploy') {
+        stage('Deploy') {
       // Solo la rama principal despliega (sirve en multibranch y en un job de pipeline simple).
       when { expression { (env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main') ==~ /(origin\/)?main/ } }
       steps {
@@ -97,6 +97,16 @@ pipeline {
         ]) {
           sh '''
             set -e
+
+            # Jenkins no trae kubectl: si falta, se descarga al workspace.
+            if ! command -v kubectl >/dev/null 2>&1; then
+              ARCH=$(uname -m); case "$ARCH" in x86_64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; esac
+              mkdir -p "$WORKSPACE/bin"
+              curl -fsSL -o "$WORKSPACE/bin/kubectl" "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/$ARCH/kubectl"
+              chmod +x "$WORKSPACE/bin/kubectl"
+              export PATH="$WORKSPACE/bin:$PATH"
+            fi
+
             rand() { head -c "$1" /dev/urandom | od -An -tx1 | tr -d '[:space:]'; }
 
             # Los secretos se crean una sola vez; la base conserva sus datos entre despliegues.
