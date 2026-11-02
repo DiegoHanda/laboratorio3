@@ -121,7 +121,11 @@ pipeline {
                 | kubectl apply -n $NAMESPACE -f -
             done
 
-            kubectl rollout status statefulset/postgres -n $NAMESPACE --timeout=180s
+            kubectl rollout status statefulset/postgres -n $NAMESPACE --timeout=180s || {
+              kubectl get pods,pvc -n $NAMESPACE
+              kubectl describe pod postgres-0 -n $NAMESPACE | tail -25
+              exit 1
+            }
             kubectl rollout status deployment/api -n $NAMESPACE --timeout=180s
             kubectl rollout status deployment/web -n $NAMESPACE --timeout=180s
           '''
