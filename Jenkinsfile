@@ -88,7 +88,6 @@ pipeline {
     }
 
         stage('Deploy') {
-      // Solo la rama principal despliega (sirve en multibranch y en un job de pipeline simple).
       when { expression { (env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main') ==~ /(origin\/)?main/ } }
       steps {
         withCredentials([
