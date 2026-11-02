@@ -130,6 +130,7 @@ pipeline {
             }
             kubectl rollout status deployment/api -n $NAMESPACE --timeout=180s
             kubectl rollout status deployment/web -n $NAMESPACE --timeout=180s
+            kubectl get pods,ingress -n $NAMESPACE
           '''
         }
       }
