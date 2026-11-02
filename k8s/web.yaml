@@ -14,7 +14,7 @@ kind: Deployment
 metadata:
   name: web
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: web
@@ -32,7 +32,7 @@ spec:
             httpGet: { path: /, port: 8080 }
             periodSeconds: 5
           resources:
-            requests: { cpu: 20m, memory: 32Mi }
+            requests: { cpu: 10m, memory: 32Mi }
             limits: { memory: 128Mi }
 ---
 apiVersion: networking.k8s.io/v1

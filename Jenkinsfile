@@ -121,6 +121,8 @@ pipeline {
                 | kubectl apply -n $NAMESPACE -f -
             done
 
+            # Si postgres-0 quedó trabado en Pending, se recrea con la configuración nueva.
+            kubectl get pod postgres-0 -n $NAMESPACE -o jsonpath='{.status.phase}' | grep -q Pending && kubectl delete pod postgres-0 -n $NAMESPACE
             kubectl rollout status statefulset/postgres -n $NAMESPACE --timeout=180s || {
               kubectl get pods,pvc -n $NAMESPACE
               kubectl describe pod postgres-0 -n $NAMESPACE | tail -25

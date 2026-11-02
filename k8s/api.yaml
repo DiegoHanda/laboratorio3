@@ -14,7 +14,7 @@ kind: Deployment
 metadata:
   name: api
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: api
@@ -50,5 +50,5 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
           resources:
-            requests: { cpu: 50m, memory: 96Mi }
+            requests: { cpu: 10m, memory: 96Mi }
             limits: { memory: 256Mi }
