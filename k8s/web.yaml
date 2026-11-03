@@ -40,7 +40,7 @@ kind: Ingress
 metadata:
   name: reservas
 spec:
-  # ingressClassName: <completar si el cluster no tiene una clase por defecto>
+  ingressClassName: apisix
   rules:
     - host: ${HOST}
       http:
